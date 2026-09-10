@@ -1,0 +1,68 @@
+[
+  {
+    "id": "KOC-A",
+    "name": "Kochi Offshore South-West (Candidate A)",
+    "latitude": 9.88,
+    "longitude": 76.12,
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [76.08, 9.85],
+          [76.16, 9.85],
+          [76.16, 9.91],
+          [76.08, 9.91],
+          [76.08, 9.85]
+        ]
+      ]
+    },
+    "region": "Kochi",
+    "active": true,
+    "data_mode": "SIMULATED_MVP",
+    "notes": "ORCA candidate patch ~17 km SW of Kochi port; not an official INCOIS PFZ."
+  },
+  {
+    "id": "KOC-B",
+    "name": "Kochi Offshore West (Candidate B)",
+    "latitude": 9.95,
+    "longitude": 76.08,
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [76.04, 9.92],
+          [76.12, 9.92],
+          [76.12, 9.98],
+          [76.04, 9.98],
+          [76.04, 9.92]
+        ]
+      ]
+    },
+    "region": "Kochi",
+    "active": true,
+    "data_mode": "SIMULATED_MVP",
+    "notes": "ORCA candidate patch ~21 km West of Kochi port; not an official INCOIS PFZ."
+  },
+  {
+    "id": "KOC-C",
+    "name": "Kochi Offshore North-West (Candidate C)",
+    "latitude": 10.08,
+    "longitude": 76.02,
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [75.98, 10.04],
+          [76.06, 10.04],
+          [76.06, 10.12],
+          [75.98, 10.12],
+          [75.98, 10.04]
+        ]
+      ]
+    },
+    "region": "Kochi",
+    "active": true,
+    "data_mode": "SIMULATED_MVP",
+    "notes": "ORCA candidate patch ~32 km NW of Kochi port; not an official INCOIS PFZ."
+  }
+]
