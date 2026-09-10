@@ -67,6 +67,9 @@ def filter_by_radius(
     Returns:
         List of matching items within radius, each augmented with 'distance_km'.
     """
+    if max_km < 0:
+        return []
+
     filtered = []
     for item in items:
         lat = item.get(lat_key)

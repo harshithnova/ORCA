@@ -62,6 +62,19 @@ class TestDistance(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["id"], "valid")
 
+    def test_known_distance(self):
+        """Distance between Kochi port (9.9312, 76.2673) and (10.0000, 76.2673) is ~7.65 km."""
+        distance = haversine_km(9.9312, 76.2673, 10.0000, 76.2673)
+        self.assertTrue(7.0 < distance < 8.0, f"Expected between 7 and 8 km, got {distance}")
+
+    def test_negative_radius_returns_empty(self):
+        """A negative search radius should safely return an empty list."""
+        items = [
+            {"id": "near", "latitude": 9.9312, "longitude": 76.2673},
+        ]
+        filtered = filter_by_radius(9.9312, 76.2673, items, max_km=-5.0)
+        self.assertEqual(filtered, [])
+
 
 if __name__ == "__main__":
     unittest.main()
