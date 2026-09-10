@@ -65,6 +65,35 @@ class TestCandidateGenerator(unittest.TestCase):
         res2 = generate_candidates(self.kochi_loc, max_radius_km=30.0)
         self.assertEqual(res1, res2)
 
+    def test_unknown_region_does_not_fallback_to_kochi(self):
+        """
+        A request for an unknown region (e.g. Mumbai, for which no fixture
+        exists) must return an empty list. It must NOT silently fall back
+        to Kochi candidates, which would be a wrong recommendation.
+        """
+        candidates = generate_candidates(
+            location={
+                "name": "Mumbai",
+                "latitude": 19.07,
+                "longitude": 72.87,
+            },
+            max_radius_km=50.0,
+        )
+        self.assertEqual(candidates, [])
+
+    def test_time_window_does_not_mutate_fixture(self):
+        """
+        Attaching a time_window must not modify the underlying fixture
+        dicts. A subsequent call without time_window should return
+        candidates that have no time_window key.
+        """
+        tw = {"valid_from": "2026-09-08T06:00:00Z", "valid_to": "2026-09-08T12:00:00Z"}
+        generate_candidates(self.kochi_loc, time_window=tw, max_radius_km=50.0)
+        # Second call without time_window
+        candidates = generate_candidates(self.kochi_loc, max_radius_km=50.0)
+        for c in candidates:
+            self.assertNotIn("time_window", c)
+
 
 if __name__ == "__main__":
     unittest.main()
