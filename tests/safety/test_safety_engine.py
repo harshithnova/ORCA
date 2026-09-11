@@ -146,5 +146,59 @@ class TestSafetyEngine(unittest.TestCase):
         self.assertEqual(res1, res2)
 
 
+
+    def test_unknown_warning_level_fails_safe_to_caution(self):
+        """Unknown/unrecognized warning level (e.g. 'Hot Day') must NOT produce clean SAFE."""
+        unknown_weather = {
+            "warning_level": "Hot Day",
+            "source": "IMD",
+            "data_mode": "CACHED_OFFICIAL",
+        }
+        res = evaluate_safety(
+            candidate=self.safe_candidate,
+            risk_result=self.safe_risk,
+            weather_record=unknown_weather,
+            data_freshness_ok=True,
+        )
+        self.assertNotEqual(res["safety_status"], "SAFE")
+        self.assertEqual(res["safety_status"], "CAUTION")
+
+    def test_unknown_warning_preserves_original_value_in_evidence(self):
+        """Original unrecognized warning string is preserved in evidence."""
+        unknown_weather = {
+            "warning_level": "Hot Day",
+            "source": "IMD",
+            "data_mode": "CACHED_OFFICIAL",
+        }
+        res = evaluate_safety(
+            candidate=self.safe_candidate,
+            risk_result=self.safe_risk,
+            weather_record=unknown_weather,
+            data_freshness_ok=True,
+        )
+        evidence = res["blocking_evidence"]
+        self.assertGreater(len(evidence), 0)
+        warning_entries = [e for e in evidence if e.get("parameter") == "warning_level"]
+        self.assertEqual(len(warning_entries), 1)
+        self.assertEqual(warning_entries[0]["value"], "Hot Day")
+
+    def test_known_caution_warning_produces_caution(self):
+        """Known caution warning level (e.g. 'YELLOW_ALERT') produces CAUTION."""
+        caution_weather = {
+            "warning_level": "YELLOW_ALERT",
+            "source": "IMD",
+            "data_mode": "CACHED_OFFICIAL",
+        }
+        res = evaluate_safety(
+            candidate=self.safe_candidate,
+            risk_result=self.safe_risk,
+            weather_record=caution_weather,
+            data_freshness_ok=True,
+        )
+        self.assertEqual(res["safety_status"], "CAUTION")
+        self.assertEqual(res["checks_performed"]["caution_warning_check"], "CAUTION")
+        self.assertEqual(res["blocking_evidence"][0]["value"], "YELLOW_ALERT")
+
+
 if __name__ == "__main__":
     unittest.main()

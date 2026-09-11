@@ -178,17 +178,59 @@ def evaluate_safety(
         }
     checks_performed["risk_threshold_check"] = "PASS"
 
-    # 7. Caution Conditions
-    is_caution = (
-        risk_score > caution_risk
-        or warning_level in caution_warnings
+    # 7. Caution Conditions & Unknown Warning Fail-Safe
+    caution_evidence: List[Dict[str, Any]] = []
+
+    # Check for unrecognized / unmapped warning level
+    is_unknown_warning = (
+        bool(warning_level)
+        and str(warning_level).strip().upper() not in ("", "NONE")
+        and warning_level not in block_warnings
+        and warning_level not in caution_warnings
     )
+    is_caution_warning = warning_level in caution_warnings
+    is_caution_risk = risk_score > caution_risk
+
+    if is_unknown_warning:
+        checks_performed["unknown_warning_check"] = "CAUTION"
+        caution_evidence.append({
+            "check": "unknown_warning_check",
+            "parameter": "warning_level",
+            "value": warning_level,
+            "source": (weather_record or {}).get("source", "IMD"),
+            "data_mode": (weather_record or {}).get("data_mode", "CACHED_OFFICIAL"),
+            "reason": (
+                f"Unrecognized official warning level '{warning_level}'. "
+                "Fails safe to CAUTION to prevent unverified safe recommendation."
+            ),
+        })
+    elif is_caution_warning:
+        checks_performed["caution_warning_check"] = "CAUTION"
+        caution_evidence.append({
+            "check": "caution_warning_check",
+            "parameter": "warning_level",
+            "value": warning_level,
+            "source": (weather_record or {}).get("source", "IMD"),
+            "data_mode": (weather_record or {}).get("data_mode", "CACHED_OFFICIAL"),
+            "reason": f"Official caution warning: warning_level = {warning_level}.",
+        })
+
+    if is_caution_risk:
+        checks_performed["risk_caution_check"] = "CAUTION"
+        caution_evidence.append({
+            "check": "risk_caution_check",
+            "parameter": "risk_score",
+            "value": risk_score,
+            "reason": f"Risk score ({risk_score}) is in caution range.",
+        })
+
+    is_caution = is_caution_risk or is_caution_warning or is_unknown_warning
     if is_caution:
         checks_performed["overall_safety"] = "CAUTION"
         return {
             "safety_status": "CAUTION",
             "blocking_reason": None,
-            "blocking_evidence": [],
+            "blocking_evidence": caution_evidence,
             "checks_performed": checks_performed,
         }
 

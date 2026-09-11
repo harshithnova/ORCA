@@ -122,3 +122,14 @@ def load_restricted_zones(
         raise ValueError(f"Expected list for restricted zones, got {type(data).__name__}")
 
     return data
+
+
+# Re-export freshness helpers for service convenience
+from backend.services.freshness import (
+    check_forecast_validity,
+    check_marine_and_weather_freshness,
+    check_record_freshness,
+    check_retrieval_freshness,
+    is_data_fresh,
+    parse_iso_datetime,
+)
