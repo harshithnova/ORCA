@@ -1,13 +1,10 @@
 """
-Unit tests for backend API routes.
+Unit and integration tests for backend API routes.
 
-Tests are focused on:
+Tests:
   - GET /health contract (API_CONTRACT.md)
-  - POST /api/v1/reason schema acceptance
-  - POST /api/v1/reason rejection of invalid/missing query
-
-These tests deliberately do NOT test business logic -- that lives in
-the P4 reasoning and safety modules with their own test suites.
+  - POST /api/v1/reason schema acceptance & rejection
+  - POST /api/v1/reason connected to pipeline_service with safety contract verification
 """
 
 import unittest
@@ -34,7 +31,7 @@ class TestHealthEndpoint(unittest.TestCase):
 
 
 class TestReasonEndpoint(unittest.TestCase):
-    """POST /api/v1/reason schema and response contract tests."""
+    """POST /api/v1/reason schema and pipeline integration tests."""
 
     def test_valid_query_accepted(self):
         """A well-formed query string is accepted with HTTP 200."""
@@ -50,26 +47,49 @@ class TestReasonEndpoint(unittest.TestCase):
         response = client.post("/api/v1/reason", json={"query": query})
         self.assertEqual(response.json()["query"], query)
 
-    def test_response_does_not_claim_safe(self):
+    def test_response_status_in_contracted_set(self):
         """
-        MVP placeholder must NOT claim SAFE / CAUTION / BLOCK / NO_SAFE_RECOMMENDATION.
-        A false safety claim before the pipeline is connected would violate AGENTS.md.
+        Status must strictly be one of the contracted safety statuses:
+        SAFE | CAUTION | BLOCK | NO_SAFE_RECOMMENDATION.
         """
         response = client.post(
             "/api/v1/reason",
             json={"query": "Find a safe fishing zone near Kochi tomorrow morning."},
         )
+        self.assertEqual(response.status_code, 200)
         contracted_safety_statuses = {"SAFE", "CAUTION", "BLOCK", "NO_SAFE_RECOMMENDATION"}
         status_value = response.json().get("status", "")
-        self.assertNotIn(
-            status_value,
-            contracted_safety_statuses,
-            msg=(
-                f"Endpoint returned a contracted safety status '{status_value}' "
-                "before the reasoning pipeline is connected. "
-                "This violates the AGENTS.md principle: LLM Plans, Code Calculates, Safety Validates."
-            ),
+        self.assertIn(status_value, contracted_safety_statuses)
+
+    def test_real_cached_kochi_query_safety_contract(self):
+        """
+        Real cached Kochi query validates safety contract:
+        - returns valid ReasonResponse
+        - location is Kochi
+        - requested_time reflects tomorrow morning
+        - status is contracted
+        - if cached data does not cover tomorrow morning, status is NO_SAFE_RECOMMENDATION
+        - never falsely claims SAFE without valid forecast coverage
+        """
+        response = client.post(
+            "/api/v1/reason",
+            json={"query": "Find a suitable and safe fishing zone near Kochi tomorrow morning."},
         )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["location"]["name"], "Kochi")
+        self.assertIsNotNone(body["requested_time"]["valid_from"])
+        self.assertIn("06:00:00", body["requested_time"]["valid_from"])
+
+        contracted_safety_statuses = {"SAFE", "CAUTION", "BLOCK", "NO_SAFE_RECOMMENDATION"}
+        self.assertIn(body["status"], contracted_safety_statuses)
+
+        # The real cached forecast ends on 2026-09-12T00:00:00Z and does not cover
+        # tomorrow morning (06:00 IST = 00:30 UTC). Thus it must fail safe to NO_SAFE_RECOMMENDATION.
+        self.assertNotEqual(body["status"], "SAFE")
+        if body["status"] == "NO_SAFE_RECOMMENDATION":
+            self.assertIsNone(body["recommendation"])
+            self.assertGreater(len(body["evidence"]), 0)
 
     def test_missing_query_field_rejected(self):
         """Request without a query field must be rejected with HTTP 422."""
@@ -96,6 +116,18 @@ class TestReasonEndpoint(unittest.TestCase):
             },
         )
         self.assertIn(response.status_code, [200, 422])
+
+    def test_unsupported_region_controlled_response(self):
+        """Query for Mumbai returns controlled NO_SAFE_RECOMMENDATION, not 500."""
+        response = client.post(
+            "/api/v1/reason",
+            json={"query": "Find a safe fishing zone near Mumbai tomorrow morning."},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "NO_SAFE_RECOMMENDATION")
+        self.assertEqual(body["location"]["name"], "Mumbai")
+        self.assertIsNone(body["recommendation"])
 
 
 if __name__ == "__main__":

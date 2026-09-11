@@ -13,6 +13,11 @@ from backend.services.freshness import (
     is_data_fresh,
     parse_iso_datetime,
 )
+from backend.services.pipeline_service import (
+    PipelineRequest,
+    parse_query_mvp,
+    run_pipeline,
+)
 
 __all__ = [
     "load_marine_record",
@@ -24,4 +29,7 @@ __all__ = [
     "check_record_freshness",
     "is_data_fresh",
     "check_marine_and_weather_freshness",
+    "PipelineRequest",
+    "parse_query_mvp",
+    "run_pipeline",
 ]
