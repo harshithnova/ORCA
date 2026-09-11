@@ -5,8 +5,45 @@ Implements the deterministic prototype model from REASONING_SPEC.md:
     Confidence = 0.50 * freshness + 0.40 * completeness + 0.10 * source_score
 Clamped to [0.0, 1.0].
 
-NOTE: Confidence indicates confidence in the data-supported recommendation,
-NOT the probability of fishing success.
+IMPORTANT: Confidence indicates confidence in the DATA-SUPPORTED RECOMMENDATION,
+NOT the probability of fishing success. High confidence does NOT mean SAFE.
+
+FRESHNESS VS VALIDITY (confirmed by code review -- team discussion required):
+Current implementation treats valid_to as the freshness reference for forecasts.
+This conflates two distinct concepts:
+  - Forecast VALIDITY: does the forecast cover the requested time window?
+    (valid_from <= query_time <= valid_to)
+  - Data FRESHNESS: how recently was the forecast issued/retrieved?
+    (how old is issued_at relative to now?)
+For MVP these are handled together. Before production integration:
+  Q-P3-1: Will normalized records always have issued_at, valid_from,
+           valid_to AND retrieved_at populated for all forecast types?
+  Q-P5-1: Should forecast validity (valid_from/valid_to window check) be
+           separated from confidence freshness scoring? Recommended: yes.
+           Validity belongs in the data normalization/adapter layer (P3).
+
+MISSING RECORD BEHAVIOUR:
+  If one domain (marine OR weather) is missing entirely, its freshness
+  contribution is halved (conservative). Whether a missing domain should
+  BLOCK the recommendation is a Safety Engine question, not a confidence one.
+
+CONFIDENCE DOES NOT OVERRIDE SAFETY:
+  confidence_score > 0.8 does NOT mean SAFE.
+  confidence_score < 0.5 does NOT automatically mean BLOCK.
+  The Safety Engine makes the final decision based on explicit hard rules.
+
+SOURCE_SCORE_MAP DATA CONTRACT:
+  SOURCE_SCORE_MAP in config.py must use exactly the same data_mode strings
+  that P3 produces in normalized records. Must be verified before integration.
+  Q-P3-2: Confirm exact data_mode enum values (CACHED_OFFICIAL, SIMULATED_MVP, etc.)
+
+OPEN QUESTIONS (from code review):
+  Q-P3-1: Confirm normalized record fields: issued_at, valid_from, valid_to, retrieved_at.
+  Q-P3-2: Confirm exact data_mode enum values for SOURCE_SCORE_MAP alignment.
+  Q-P5-1: Separate forecast validity check from freshness scoring?
+  Q-P5-2: Should missing an entire data domain (marine/weather) trigger a Safety block?
+  Q-P5-3: Should confidence weights be validated (sum=1.0, all>=0) in config layer?
+  Q-P6-1: Future: weight critical vs non-critical fields differently in completeness.
 """
 
 from datetime import datetime, timezone
@@ -45,11 +82,19 @@ def calculate_freshness(
     """
     Calculate freshness score in [0.0, 1.0] for a data record.
 
-    Uses 'valid_to' as the reference validity timestamp. If 'valid_to' is missing,
-    falls back to 'retrieved_at' or 'issued_at'.
+    Uses 'valid_to' as the reference timestamp (end of forecast validity window).
+    Falls back to issued_at then retrieved_at if valid_to is absent.
 
-    If query_time falls within or before valid_to, freshness is 1.0.
-    If query_time is past valid_to, freshness degrades linearly based on age.
+    Freshness = 1.0 when query_time is within or before valid_to.
+    Freshness degrades linearly after valid_to expires, reaching 0.0
+    at CONFIDENCE_MAX_AGE_HOURS past the reference timestamp.
+
+    IMPORTANT: This implementation currently combines two distinct concepts:
+    - Forecast validity (does the forecast cover query_time?)
+    - Data freshness (how recently was the data issued/retrieved?)
+    For full separation, the validity check (valid_from <= query_time <= valid_to)
+    should be handled by the upstream data normalization layer (P3/P5).
+    See module docstring Q-P5-1.
     """
     if not record:
         return 0.0
@@ -102,6 +147,12 @@ def calculate_source_score(
 ) -> float:
     """
     Calculate source reliability score in [0.0, 1.0].
+
+    Args:
+        data_mode: Data mode string (e.g. CACHED_OFFICIAL, SIMULATED_MVP).
+                   Must match keys in SOURCE_SCORE_MAP in config.py.
+        source_name: Reserved for future source-specific scoring (e.g. INCOIS vs IMD).
+                     Currently unused -- data_mode is sufficient for MVP.
     """
     if not data_mode:
         return 0.3
@@ -129,6 +180,21 @@ def calculate_confidence(
     """
     cfg_weights = (config or {}).get("weights", CONFIDENCE_WEIGHTS)
     max_age = (config or {}).get("max_age_hours", CONFIDENCE_MAX_AGE_HOURS)
+
+    # Validate weight configuration: all weights non-negative and sum to ~1.0.
+    _w = [
+        cfg_weights.get("freshness", 0.50),
+        cfg_weights.get("completeness", 0.40),
+        cfg_weights.get("source_score", 0.10),
+    ]
+    if any(w < 0 for w in _w):
+        raise ValueError(f"Confidence weights must be non-negative: {_w}")
+    _wsum = sum(_w)
+    if abs(_wsum - 1.0) > 0.01:
+        raise ValueError(
+            f"Confidence weights must sum to 1.0 (got {_wsum:.4f}). "
+            "Check CONFIDENCE_WEIGHTS in config.py."
+        )
 
     # 1. Freshness (average of marine and weather freshness)
     marine_fresh = calculate_freshness(marine_record, query_time, max_age)

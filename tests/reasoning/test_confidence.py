@@ -113,5 +113,42 @@ class TestConfidence(unittest.TestCase):
         self.assertEqual(res1, res2)
 
 
+    def test_invalid_weights_raise_error(self):
+        """Confidence weights that do not sum to 1.0 must raise ValueError."""
+        bad_config = {"weights": {
+            "freshness": 0.90,
+            "completeness": 0.90,
+            "source_score": 0.90,
+        }}
+        with self.assertRaises(ValueError):
+            calculate_confidence(None, None, config=bad_config)
+
+    def test_negative_weights_raise_error(self):
+        """Negative confidence weights must raise ValueError."""
+        bad_config = {"weights": {
+            "freshness": -0.50,
+            "completeness": 0.90,
+            "source_score": 0.60,
+        }}
+        with self.assertRaises(ValueError):
+            calculate_confidence(None, None, config=bad_config)
+
+    def test_high_confidence_does_not_imply_safe(self):
+        """Confidence score is NOT a safety decision -- just verify is_simulated flag is independent."""
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        marine = {"valid_to": now.isoformat(), "data_mode": "CACHED_OFFICIAL",
+                  "wave_height_m": 1.0, "sst_c": 28.0,
+                  "chlorophyll_mg_m3": 0.5, "wind_speed_ms": 4.0}
+        weather = {"valid_to": now.isoformat(), "data_mode": "CACHED_OFFICIAL",
+                   "wind_speed_ms": 4.0, "rainfall_mm": 1.0,
+                   "warning_level": "NONE", "temperature_c": 30.0}
+        result = calculate_confidence(marine, weather, query_time=now)
+        # High confidence is possible; safety is NOT determined here
+        self.assertGreaterEqual(result["confidence_score"], 0.0)
+        self.assertLessEqual(result["confidence_score"], 1.0)
+        self.assertFalse(result["is_simulated"])
+
+
 if __name__ == "__main__":
     unittest.main()
