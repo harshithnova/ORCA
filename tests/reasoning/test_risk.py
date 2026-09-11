@@ -87,5 +87,47 @@ class TestRisk(unittest.TestCase):
         self.assertEqual(res1, res2)
 
 
+    def test_invalid_weights_raise_error(self):
+        """Risk weights that do not sum to 1.0 must raise ValueError."""
+        bad_config = {"weights": {
+            "wave_risk": 0.50,
+            "wind_risk": 0.50,
+            "lightning_risk": 0.50,
+            "rain_risk": 0.50,
+            "hazard_risk": 0.50,
+        }}
+        with self.assertRaises(ValueError):
+            calculate_risk(None, None, config=bad_config)
+
+    def test_negative_weights_raise_error(self):
+        """Negative risk weights must raise ValueError."""
+        bad_config = {"weights": {
+            "wave_risk": -0.30,
+            "wind_risk": 0.55,
+            "lightning_risk": 0.20,
+            "rain_risk": 0.30,
+            "hazard_risk": 0.25,
+        }}
+        with self.assertRaises(ValueError):
+            calculate_risk(None, None, config=bad_config)
+
+    def test_lightning_always_stubbed(self):
+        """Lightning risk must be 0.0 and lightning_data_missing=True until P3 confirms field."""
+        result = calculate_risk(
+            {"wave_height_m": 1.0, "wind_speed_ms": 5.0},
+            {"warning_level": "NONE", "rainfall_mm": 1.0},
+        )
+        self.assertEqual(result["components"]["lightning_risk"], 0.0)
+        self.assertTrue(result["lightning_data_missing"])
+
+    def test_unknown_warning_level_returns_nonzero(self):
+        """An unrecognised warning_level must return a non-zero hazard risk (not silently safe)."""
+        result = calculate_risk(
+            {"wave_height_m": 1.0, "wind_speed_ms": 5.0},
+            {"warning_level": "UNKNOWN_EXTREME_EVENT", "rainfall_mm": 1.0},
+        )
+        self.assertGreater(result["components"]["hazard_risk"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

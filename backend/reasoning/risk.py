@@ -10,12 +10,47 @@ Implements the deterministic prototype model from REASONING_SPEC.md:
       + 0.10 * hazard risk
 Clamped to integer [0, 100].
 
-NOTE:
-- All formulas here are PROTOTYPE HEURISTICS for MVP.
-- They are NOT official safety standards or official hazard advisories.
-- Lightning risk is stubbed to 0.0 with 'lightning_data_missing=True' until
-  Person 3 confirms the exact IMD lightning/thunderstorm parameter.
-- Hazard risk is derived from the warning_level field.
+PROTOTYPE LIMITATIONS (confirmed by code review):
+- All formulas are PROTOTYPE HEURISTICS, not official safety standards.
+- Wave/wind/rain thresholds in config.py are prototype values, not official
+  vessel-safety limits from any maritime authority.
+- Risk score DOES NOT equal a safety decision. The Safety Engine makes the
+  final SAFE/CAUTION/BLOCK determination after checking this score.
+
+CRITICAL STUB: LIGHTNING (weight 0.20) [Q-P3-1]:
+- lightning_risk = 0.0 always (stub). lightning_data_missing=True is set.
+- This means the calculated risk score is SYSTEMATICALLY LOWER than the
+  intended model whenever lightning/thunderstorm is a real hazard.
+- The Safety Engine must not treat lightning_data_missing=True as "no danger".
+  It is a data-quality limitation, not a confirmed safe condition.
+- ACTION: P3 must confirm the exact IMD field name, units, and value range
+  before this stub can be replaced with real data.
+
+MISSING CRITICAL DATA BEHAVIOUR (by design -- reviewed and confirmed):
+- Missing wave_height_m or wind_speed_ms -> component = 0.0 risk.
+  This does NOT mean zero danger. It means data is unavailable.
+- These fields are added to missing_critical_fields, which the Safety Engine
+  uses to trigger a fail-safe BLOCK (T5). Do NOT use risk_score alone.
+- missing_critical_fields is the correct integration point with safety_engine.
+
+UNKNOWN WARNING LEVEL FALLBACK:
+- Unrecognised warning_level values get hazard_risk = 25.0 (non-zero).
+- This may UNDERESTIMATE danger for severe unrecognised warnings
+  (e.g. "EXTREME_STORM" not in config enum -> 25.0 instead of 100.0).
+- Future: unknown critical warnings should be treated as a data-quality
+  failure and surfaced to the Safety Engine for a fail-safe decision.
+- ACTION: P3 must freeze the complete warning_level enum before production.
+
+OPEN QUESTIONS (from code review -- must resolve before integration):
+
+  Q-P3-1: Exact IMD lightning/thunderstorm field name, units, and value range?
+  Q-P3-2: Complete warning_level enum -- exact string values and BLOCK vs CAUTION mapping?
+  Q-P3-3: Are marine and weather wind_speed_ms fields compatible for the fallback?
+  Q-P5-1: Does safety_engine.py block when missing_critical_fields is non-empty? (T5)
+  Q-P5-2: Where should risk weight validation (sum=1.0, all>=0) live -- here or config.py?
+  Q-P5-3: How should stale-data checks interact with missing_critical_fields?
+  Q-P6-1: Test cases needed: missing lightning, unknown warning, missing wave/wind/warning,
+           high risk with no hard-block, and boundary cases at risk thresholds.
 """
 
 from typing import Any, Dict, List, Optional
@@ -72,7 +107,11 @@ def calculate_hazard_risk(warning_level: Optional[str]) -> float:
         return 100.0
     if warning_level in CAUTION_WARNING_LEVELS:
         return 50.0
-    return 25.0  # Generic unclassified warning
+    # Unknown/unrecognised warning level: use non-zero fallback (25.0).
+    # WARNING: this may underestimate danger for severe unrecognised values.
+    # Future: unknown warnings should surface to Safety Engine as data-quality failures.
+    # ACTION REQUIRED (P3): freeze the complete warning_level enum before production.
+    return 25.0
 
 
 def calculate_risk(
@@ -96,6 +135,24 @@ def calculate_risk(
         and lightning_data_missing flag.
     """
     weights = (config or {}).get("weights", RISK_WEIGHTS)
+
+    # Validate weight configuration: all weights non-negative and sum to ~1.0.
+    _w = [
+        weights.get("wave_risk", 0.30),
+        weights.get("wind_risk", 0.25),
+        weights.get("lightning_risk", 0.20),
+        weights.get("rain_risk", 0.15),
+        weights.get("hazard_risk", 0.10),
+    ]
+    if any(w < 0 for w in _w):
+        raise ValueError(f"Risk weights must be non-negative: {_w}")
+    _wsum = sum(_w)
+    if abs(_wsum - 1.0) > 0.01:
+        raise ValueError(
+            f"Risk weights must sum to 1.0 (got {_wsum:.4f}). "
+            "Check RISK_WEIGHTS in config.py."
+        )
+
     missing_fields: List[str] = []
     missing_critical_fields: List[str] = []
 
