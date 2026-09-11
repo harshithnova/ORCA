@@ -4,9 +4,24 @@ Spatial filtering module for ORCA decision-support system.
 Performs deterministic geometry intersection checks between candidate zones
 and restricted / geofenced maritime zones using Shapely.
 
-RULE (SAFETY_SPEC.md):
-- Any candidate geometry that intersects or touches a restricted zone is HARD BLOCKED.
+SAFETY RULES (SAFETY_SPEC.md):
+- Any candidate geometry that intersects OR touches a restricted zone is HARD BLOCKED.
+- Invalid / unparseable candidate geometry is HARD BLOCKED (fail-safe, never silent pass).
 - Provenance and restriction details are preserved in the blocking reason.
+
+SPATIAL CONTRACT (team-agreed requirements, confirmed by code review):
+
+1. CRS GUARANTEE (EPSG:4326):
+   All spatial inputs MUST be normalized to WGS84 / EPSG:4326 before reaching
+   this module. Shapely has no CRS awareness -- cross-CRS inputs produce wrong results.
+   CRS normalization is the responsibility of the upstream adapter layer (P3/P5).
+
+2. INVALID RESTRICTED ZONE POLICY [TEAM ACTION REQUIRED -- P5/P6]:
+   Restricted zones with unparseable geometry are currently skipped (not blocking).
+   MVP decision: avoids one malformed fixture making the system unusable. However,
+   ORCA cannot verify candidate overlap against that zone -- known data-quality risk.
+   DECISION NEEDED: Should invalid restriction data trigger a system-level fail-safe?
+   Must be resolved before production deployment.
 """
 
 import json
@@ -88,7 +103,8 @@ def apply_spatial_filter(
         blocking_info = None
 
         for rz_dict, r_shape in parsed_zones:
-            if cand_shape.intersects(r_shape):
+            # Use check_candidate_intersection() for internal consistency
+            if check_candidate_intersection(cand_shape, r_shape):
                 is_blocked = True
                 blocking_info = {
                     "zone_id": rz_dict.get("id", "UNKNOWN"),
@@ -117,7 +133,12 @@ def apply_spatial_filter(
 
 
 def load_restricted_zones(file_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Helper to load restricted zones from GeoJSON / JSON fixture file."""
+    """Load restricted zones from a JSON / GeoJSON fixture file.
+
+    MVP: reads from data/fixtures/restricted_zones.json by default.
+    Future: this loader will be replaced by a PostGIS / official geospatial
+    data source (P3/P5). Do not treat the JSON fixture as permanent architecture.
+    """
     path = Path(file_path) if file_path else Path(__file__).parents[2] / "data" / "fixtures" / "restricted_zones.json"
     if not path.exists():
         return []
