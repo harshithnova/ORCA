@@ -15,6 +15,28 @@ NOTE:
 - They are NOT official scientific standards or species-specific predictions.
 - If PFZ signal is unavailable, it is NOT invented; a conservative fallback (0.0)
   is applied and pfz_fallback_used is flagged True.
+
+PROTOTYPE LIMITATIONS (confirmed by code review):
+- Chlorophyll is one environmental proxy. High values do not automatically
+  indicate better conditions. Do not claim "more chlorophyll = more fish".
+- SST optimum (28 C) is a universal heuristic, not a species or region-
+  specific ecological model. is_prototype=True is always set in output.
+
+MISSING DATA BEHAVIOUR (MVP -- team decision pending P5+P6):
+  Missing field -> component = 0.0, field added to missing_fields list.
+  Future options: (A) zero [current], (B) redistribute weights,
+  (C) reduce confidence score instead. Option C best fits Safety Engine.
+
+OPEN QUESTIONS from code review:
+  Q-P3-1: PFZ signal: 0-1 or 0-100? Must be standardized in DATA_CONTRACT.
+  Q-P3-2: Are marine and weather wind_speed_ms compatible for the fallback?
+  Q-P3-3: Valid physical ranges for chlorophyll and sst in INCOIS/IMD data?
+  Q-P3-4: Forecast or latest-observed records for suitability calculation?
+  Q-P5-1: Missing input: reduce score, reduce confidence, or block?
+  Q-P5-2: Where should weight-sum validation (sum=1.0, all>=0) live?
+  Q-P6-1: How to document prototype heuristics in QA test plan and demo?
+  Q-P6-2: What edge tests should cover missing and extreme-value inputs?
+  Q-P2-1: Will Planner provide normalized location+time for per-candidate data?
 """
 
 from typing import Any, Dict, List, Optional
@@ -100,6 +122,25 @@ def calculate_suitability(
         sub-components, missing fields, and metadata.
     """
     weights = (config or {}).get("weights", SUITABILITY_WEIGHTS)
+
+    # Validate weight configuration: all weights non-negative and sum to ~1.0.
+    # Catches accidental misconfiguration early rather than hiding it in the clamp.
+    _w = [
+        weights.get("pfz_signal", 0.35),
+        weights.get("chlorophyll", 0.20),
+        weights.get("sst", 0.15),
+        weights.get("wave_suitability", 0.15),
+        weights.get("weather_suitability", 0.15),
+    ]
+    if any(w < 0 for w in _w):
+        raise ValueError(f"Suitability weights must be non-negative: {_w}")
+    _wsum = sum(_w)
+    if abs(_wsum - 1.0) > 0.01:
+        raise ValueError(
+            f"Suitability weights must sum to 1.0 (got {_wsum:.4f}). "
+            "Check SUITABILITY_WEIGHTS in config.py."
+        )
+
     missing_fields: List[str] = []
 
     # 1. PFZ Signal component (0-100)

@@ -101,5 +101,30 @@ class TestSuitability(unittest.TestCase):
         self.assertEqual(res1, res2)
 
 
+    def test_invalid_weights_raise_error(self):
+        """Misconfigured weights that do not sum to 1.0 must raise ValueError."""
+        bad_config = {"weights": {
+            "pfz_signal": 0.50,
+            "chlorophyll": 0.50,
+            "sst": 0.50,
+            "wave_suitability": 0.50,
+            "weather_suitability": 0.50,
+        }}
+        with self.assertRaises(ValueError):
+            calculate_suitability(None, None, config=bad_config)
+
+    def test_negative_weights_raise_error(self):
+        """Negative weights must raise ValueError."""
+        bad_config = {"weights": {
+            "pfz_signal": -0.35,
+            "chlorophyll": 0.55,
+            "sst": 0.20,
+            "wave_suitability": 0.30,
+            "weather_suitability": 0.30,
+        }}
+        with self.assertRaises(ValueError):
+            calculate_suitability(None, None, config=bad_config)
+
+
 if __name__ == "__main__":
     unittest.main()
