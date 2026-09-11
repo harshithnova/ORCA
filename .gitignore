@@ -18,6 +18,10 @@ env/
 .env
 *.env
 
+# Raw provider data
+data/raw/*.nc
+data/raw/*.html
+
 # IDE
 .vscode/
 .idea/

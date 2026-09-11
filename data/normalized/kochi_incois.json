@@ -1,0 +1,19 @@
+{
+  "latitude": 9.900000000000006,
+  "longitude": 76.1,
+  "issued_at": null,
+  "valid_from": "2026-09-11T00:00:00",
+  "valid_to": null,
+  "wave_height_m": 0.766879677772522,
+  "wave_period_s": 16.52035138158731,
+  "wind_speed_ms": 2.6744725860650678,
+  "wind_direction_deg": 340.409022315585,
+  "current_speed_ms": null,
+  "current_direction_deg": null,
+  "sst_c": null,
+  "chlorophyll_mg_m3": null,
+  "source": "INCOIS",
+  "source_url": "https://incois.gov.in/thredds/fileServer/osf/ww3/rsmc_combined_ww3_20260910.nc",
+  "data_mode": "CACHED_OFFICIAL",
+  "data_type": "FORECAST"
+}
