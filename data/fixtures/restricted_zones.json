@@ -1,0 +1,22 @@
+[
+  {
+    "id": "RZ-KOC-NAV-01",
+    "name": "Kochi Harbor Approach & Naval Channel (Restricted)",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [76.05, 9.93],
+          [76.15, 9.93],
+          [76.15, 10.00],
+          [76.05, 10.00],
+          [76.05, 9.93]
+        ]
+      ]
+    },
+    "restriction_type": "PORT_APPROACH_CHANNEL",
+    "source": "SIMULATED_MVP",
+    "active": true,
+    "description": "Simulated security corridor for test scenario T3 (restricted zone block)."
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "latitude": 9.9,
+  "longitude": 76.1,
+  "issued_at": null,
+  "valid_from": "2026-09-11T00:00:00+00:00",
+  "valid_to": "2026-09-12T00:00:00+00:00",
+  "wave_height_m": null,
+  "wave_period_s": null,
+  "wind_speed_ms": null,
+  "wind_direction_deg": null,
+  "rainfall_mm": null,
+  "visibility_km": null,
+  "weather_condition": "Partly cloudy sky with one or two spells of rain or thundershowers",
+  "warning_level": "Hot Day",
+  "source": "IMD",
+  "source_url": "https://city.imd.gov.in/citywx/city_weather_test_try_warnings.php?id=43353",
+  "retrieved_at": "2026-09-11T14:20:39.101278+00:00",
+  "data_mode": "CACHED_OFFICIAL",
+  "data_type": "FORECAST"
+}
