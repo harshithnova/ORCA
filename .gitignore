@@ -1,31 +1,4 @@
-# Python
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-*.egg
-
-# Virtual environments
+*.pyc
+.pytest_cache/
 .venv/
-venv/
-env/
-
-# Environment variables / secrets
-.env
-*.env
-
-# Raw provider data
-data/raw/*.nc
-data/raw/*.html
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
